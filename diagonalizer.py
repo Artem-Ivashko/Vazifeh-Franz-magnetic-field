@@ -62,7 +62,7 @@ def LandauEnergyTh( LLNumber, Parameters, Deltapz = 0., NodeNumber = 1 ):
         
     tempVar = (Deltapz**2)*(VelocityZNode**2) + 2.*fabs(LLNumber)*Parameters.lBinv2*(VelocityXNode**2)
     if LLNumber == 0:
-        return EnergyNode
+        return EnergyNode + Deltapz * VelocityZNode
     else:
         return EnergyNode + sign(LLNumber)*sqrt(tempVar)
     
