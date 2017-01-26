@@ -75,9 +75,14 @@ def onsite_1D( site,p ):
     
 #It is the on-site energy according to the Hamiltonian that is written in Baireuther et al.'16
 #And that seems to be actually realized in the Paul's code "franz_model.py"
-    return p.tp*sin(pyLong)*s3s2 + p.tzp*sin(p.pz)*s2s0 \
+    Onsite_temp = p.tp*sin(pyLong)*s3s2 + p.tzp*sin(p.pz)*s2s0 \
     + ( p.M0+p.t+p.t*(1-cos(pyLong))+p.tz*(1-cos(p.pz)) )*s1s0 \
     + p.b0/2.*s2s3 + p.betaz/2.*s0s3
+    if (x == 0):
+        return p.Rescale_onsite0 * Onsite_temp
+    else:
+        return Onsite_temp
+    
 #And below is the on-site energy implemented in the code that was given to Artem by Paul on 28-Nov'16
 #Which seems to give the same spectrum. The differences are in some of the 4x4 matrices
 #    return   p.tp*sin(pyLong)*s3s2 + p.tzp*sin(p.pz)*s3s3 \
@@ -89,10 +94,17 @@ def onsite_1D( site,p ):
 def hop_1D( s1,s2,p ):
 #The hopping according to the Hamiltonian that is written in Baireuther et al.'16
 #is the same it was implemented in the code that was given to Artem by Paul on 28-Nov'16
-    return - 0.5j*p.tp*s3s1 - 0.5*p.t*s1s0
+#Only the prefactor in front of j was flipped to opposite (on 260jan-2017),
+#in order to accomodate to the notation of Artem that is used in his TeX notes
+    x, = s2.pos
+    if x == 0:
+        return p.Rescale_hop0 * (+ 0.5j*p.tp*s3s1 - 0.5*p.t*s1s0)
+    else:
+        return + 0.5j*p.tp*s3s1 - 0.5*p.t*s1s0
 
 
-
+#Remark from https://kwant-project.org/doc/1.0/tutorial/tutorial1:
+#sys[lat(i1, j1), lat(i2, j2)] = ... the hopping matrix element FROM point (i2, j2) TO point (i1, j1).
 def FinalizedSystem_1D( SitesCount_X ):
     # lattices
     lat = kwant.lattice.general( ( (1,), ) )
@@ -103,7 +115,7 @@ def FinalizedSystem_1D( SitesCount_X ):
         sys[lat(nx,)]=onsite_1D
     # hoppings
     for nx in range(SitesCount_X-1):
-        sys[lat(nx+1,),lat(nx,)]=hop_1D    
+        sys[lat(nx+1,), lat(nx,)] = hop_1D
     # finalize the system
     return sys.finalized()
     
@@ -117,8 +129,8 @@ def diagonalize_1D( FinalizedSystem, Parameters ):
     #so that they are the closest (wrt to the Hermitian norm) to this value. (The largest-in-magnitude label ('LM') is misleading,
     #since here we work in the "shift-invert" mode, so that actually the largest eigenvalues of the 1 / (H - omega) matrix 
     #are sought for. The numerical check is in agreement with this picture.)
-    EigenValues, EigenVectors = lag.eigsh( ham_sparse,k=Parameters.EigenvectorsCount,return_eigenvectors=True, \
-                                          which='LM',sigma=Parameters.FermiEnergy, tol=Parameters.EnergyPrecision )
+    EigenValues, EigenVectors = lag.eigsh( ham_sparse, k=Parameters.EigenvectorsCount, return_eigenvectors=True, \
+                                          which='LM', sigma=Parameters.FermiEnergy, tol=Parameters.EnergyPrecision )
     EigenVectors = np.transpose(EigenVectors)
     #Sorting the wavefunctions by eigenvalues, so that the states with the lowest energies come first
     idx = EigenValues.argsort()
