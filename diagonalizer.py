@@ -71,7 +71,7 @@ def LandauEnergyTh( LLNumber, Parameters, Deltapz = 0., NodeNumber = 1 ):
 def onsite_1D( site,p ):
     # for magnetic field in z-direction, Landau gauge
     x,=site.pos
-    pyLong = p.py - float(x-p.x_shift)*float(p.lBinv2)
+    pyLong = p.py + float(x-p.x_shift)*float(p.lBinv2)
     
 #It is the on-site energy according to the Hamiltonian that is written in Baireuther et al.'16
 #And that seems to be actually realized in the Paul's code "franz_model.py"
