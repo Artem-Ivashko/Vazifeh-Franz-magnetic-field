@@ -80,6 +80,8 @@ def onsite_1D( site,p ):
     + p.b0/2.*s2s3 + p.betaz/2.*s0s3
     if (x == 0):
         return p.Rescale_onsite0 * Onsite_temp
+    if (x == 1):
+        return p.Rescale_onsite1 * Onsite_temp
     else:
         return Onsite_temp
     
