@@ -50,7 +50,7 @@ class SimpleNamespace(object):
        
        
         
-def LandauEnergyTh( LLNumber, Parameters, Deltapz = 0., NodeNumber = 1 ):
+def LandauEnergyTh(LLNumber, Parameters, Deltapz = 0., NodeNumber = 1):
     if NodeNumber == 1:
         EnergyNode = Parameters.EnergyNode1
         VelocityZNode = Parameters.VelocityZNode1
@@ -66,8 +66,12 @@ def LandauEnergyTh( LLNumber, Parameters, Deltapz = 0., NodeNumber = 1 ):
     else:
         return EnergyNode + sign(LLNumber)*sqrt(tempVar)
     
-    
-    
+
+
+
+
+
+
 def onsite_1D( site,p ):
     # for magnetic field in z-direction, Landau gauge
     x,=site.pos
