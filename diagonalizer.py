@@ -8,6 +8,8 @@ import kwant
 # standard imports
 import numpy as np
 from scipy.sparse import linalg as lag
+from scipy.optimize import brentq
+
 from matplotlib import pyplot as plt
 
 from tinyarray import array as ta
@@ -65,10 +67,40 @@ def LandauEnergyTh(LLNumber, Parameters, Deltapz = 0., NodeNumber = 1):
         return EnergyNode + Deltapz * VelocityZNode
     else:
         return EnergyNode + sign(LLNumber)*sqrt(tempVar)
+
     
 
+def ZerothLLEnergyQL(py, FinalizedSystem, Parameters):
+    Parameters.py = 0.
+    evals, evecs = diagonalize_1D(FinalizedSystem, Parameters)
+    BulkZerothLLEnergy = max([Energy for Energy in evals if Energy<0])
+    
+    Parameters.py = py
+    evals, evecs = diagonalize_1D(FinalizedSystem, Parameters)
+    return min([Energy for Energy in evals if Energy-BulkZerothLLEnergy> -10e-5])
 
 
+
+# Quantum limit in magnetic field is assumed here
+# I use here the Brent's method, because a naive manual shoo-and-see method performs poorly (at least in my particular 
+# realization)
+def FermiVelocityZQL(FinalizedSystem, Parameters, pzStep = 10e-3, BulkZerothLLEnergyNegative = True, debug = False):
+    if BulkZerothLLEnergyNegative == True:
+        #I assume that py = 0 corresponds to the BULK energy levels
+        pyFermi = brentq(lambda py: ZerothLLEnergyQL(py, FinalizedSystem, Parameters), -1., 0., xtol = 10e-5, rtol = 10e-5)
+        Parameters.py = 0.
+        evals, evecs = diagonalize_1D(FinalizedSystem, Parameters)
+        BulkZerothLLEnergy = max([Energy for Energy in evals if Energy<0])
+    
+        Parameters.py = pyFermi
+        if debug == True:
+            print(ZerothLLEnergyQL(pyFermi, FinalizedSystem, Parameters))
+        Parameters.pz = Parameters.pz + pzStep
+        evals, evecs = diagonalize_1D(FinalizedSystem, Parameters)
+        return min([Energy for Energy in evals if Energy-BulkZerothLLEnergy> -10e-5])/pzStep
+    
+    else:
+        raise ValueError("So far, only the option 'BulkZerothLLEnergyNegative = True' is treated")    
 
 
 
