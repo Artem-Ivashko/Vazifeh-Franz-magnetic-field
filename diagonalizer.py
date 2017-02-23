@@ -15,6 +15,8 @@ from matplotlib import pyplot as plt
 from tinyarray import array as ta
 from numpy import kron, sign, sqrt, fabs, sin, cos
 
+from copy import copy
+
 # Pauli matrices
 sigma0 = ta([[1, 0], [0, 1]])
 sigma1 = ta([[0, 1], [1, 0]])
@@ -68,36 +70,116 @@ def LandauEnergyTh(LLNumber, Parameters, Deltapz = 0., NodeNumber = 1):
     else:
         return EnergyNode + sign(LLNumber)*sqrt(tempVar)
 
-    
 
-def ZerothLLEnergyQL(py, FinalizedSystem, Parameters):
-    Parameters.py = 0.
-    evals, evecs = diagonalize_1D(FinalizedSystem, Parameters)
+
+def VelocityZ(WaveFunction, FinalizedSystem, Parameters):
+    p = copy(Parameters)
+    position_1D = realspace_position_1D(FinalizedSystem)
+    SitesCount_X = len(FinalizedSystem.sites)
+# Here I neglect possible deformation of the Hamiltonian at the boundary lattice sites
+# If it is present, then one has to modify the velocity operator as well
+    VelocityZOperator = p.tzp * cos(p.pz) * s2s0 + p.tz * sin(p.pz) * s1s0
+    velocityDistribution = [np.vdot(WaveFunction[position_1D[j]], np.dot(VelocityZOperator, WaveFunction[position_1D[j]])) for j in range(SitesCount_X)]
+    return sum(np.real(velocityDistribution)) 
+
+
+    
+#TODO: replace the comparison involving factor 0.5 with some better criterion
+def ZerothLLEnergyQL(py, FinalizedSystem, Parameters, debug = False, BulkZerothLLEnergyNegative = True, EnergyPrecision = 10e-6):
+    p = copy(Parameters)
+    p.py = 0.
+    p.FermiEnergy = 0.
+    p.EnergyPrecision = EnergyPrecision
+
+    evals, evecs = diagonalize_1D(FinalizedSystem, p)
     BulkZerothLLEnergy = max([Energy for Energy in evals if Energy<0])
     
-    Parameters.py = py
-    evals, evecs = diagonalize_1D(FinalizedSystem, Parameters)
-    return min([Energy for Energy in evals if Energy-BulkZerothLLEnergy> -10e-5])
+    if debug == True:
+        print('Bulk-state LLL energy =', BulkZerothLLEnergy)
+
+    p.py = py
+    evals, evecs = diagonalize_1D(FinalizedSystem, p)
+
+    EnergiesVicinityBulkLLL = [Energy for Energy in evals if abs(Energy - BulkZerothLLEnergy) <= 10.*abs(EnergyPrecision)]
+    if [Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10.*abs(EnergyPrecision)]:
+        EnergyJustAboveBulkLLL = min([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10.*abs(EnergyPrecision)])
+        if len([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10.*abs(EnergyPrecision)]) >= 2:
+            EnergySecondAboveBulkLLL = min([Energy for Energy in evals if Energy - EnergyJustAboveBulkLLL > 0.])
+        else: return EnergyJustAboveBulkLLL
+    else: return max(EnergiesVicinityBulkLLL)
+
+#     if hasattr(p, 'VelocityZNode2'):
+#         VelocityZNode2 = p.VelocityZNode2
+#     else:
+#         VelocityZNode2 = 1.
+
+    if not EnergiesVicinityBulkLLL:
+        if debug == True:
+            print('No energies around the bulk LLL')
+        return EnergyJustAboveBulkLLL
+    else:
+        MaxEnergyVicinityBulkLLL = max(EnergiesVicinityBulkLLL)
+        if [Energy for Energy in evals if Energy < MaxEnergyVicinityBulkLLL]:
+            SecondToMaxEnergyVicinityBulkLLL = [Energy for Energy in evals if Energy < MaxEnergyVicinityBulkLLL][-1]
+#I don't like this resolution of 'if':
+        else:
+            return MaxEnergyVicinityBulkLLL
+        if EnergyJustAboveBulkLLL - max(EnergiesVicinityBulkLLL) > 10.*(MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL) \
+           and EnergySecondAboveBulkLLL - EnergyJustAboveBulkLLL > 10.*(MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL):
+# I don't like this place (both parts of the boolean argument in the 'if' statement), it should be somehow redone:
+#         if EnergySecondAboveBulkLLL - EnergyJustAboveBulkLLL > 0.5*(EnergyJustAboveBulkLLL - BulkZerothLLEnergy) \
+#                 and EnergyJustAboveBulkLLL < 0.:
+#EnergySecondAboveBulkLLL - EnergyJustAboveBulkLLL > 2.*abs(VelocityZNode2)*sqrt(p.lBinv2):
+            if debug == True:
+                print('I choose EnergyJustAboveBulkLLL, while EnergySecondAboveBulkLLL =', EnergySecondAboveBulkLLL)
+            return EnergyJustAboveBulkLLL
+        else:
+            return MaxEnergyVicinityBulkLLL
 
 
 
 # Quantum limit in magnetic field is assumed here
 # I use here the Brent's method, because a naive manual shoo-and-see method performs poorly (at least in my particular 
 # realization)
-def FermiVelocityZQL(FinalizedSystem, Parameters, pzStep = 10e-3, BulkZerothLLEnergyNegative = True, debug = False):
+def FermiVelocityZQL(FinalizedSystem, Parameters, BulkZerothLLEnergyNegative = True, \
+                            EnergyPrecision = 10e-6, pyGuess = 1., debug = False):
     if BulkZerothLLEnergyNegative == True:
-        #I assume that py = 0 corresponds to the BULK energy levels
-        pyFermi = brentq(lambda py: ZerothLLEnergyQL(py, FinalizedSystem, Parameters), -1., 0., xtol = 10e-5, rtol = 10e-5)
-        Parameters.py = 0.
-        evals, evecs = diagonalize_1D(FinalizedSystem, Parameters)
-        BulkZerothLLEnergy = max([Energy for Energy in evals if Energy<0])
-    
-        Parameters.py = pyFermi
+        # I assume that py = 0 corresponds to the BULK energy levels
+        # py > 0. is expected to correspond to the state at the LEFT boundary,
+        # py < 0. -- to the RIGHT boundary
+        p = copy(Parameters)
+        p.FermiEnergy = 0.
+        p.EnergyPrecision = EnergyPrecision
+
+        pyFermi = brentq(ZerothLLEnergyQL, pyGuess, 0., \
+                            xtol = 10e-5, rtol = 10e-5, args = (FinalizedSystem, p), disp = True)
+
         if debug == True:
-            print(ZerothLLEnergyQL(pyFermi, FinalizedSystem, Parameters))
-        Parameters.pz = Parameters.pz + pzStep
-        evals, evecs = diagonalize_1D(FinalizedSystem, Parameters)
-        return min([Energy for Energy in evals if Energy-BulkZerothLLEnergy> -10e-5])/pzStep
+            print('pyF =', pyFermi)
+
+        p.py = 0.
+        evals, evecs = diagonalize_1D(FinalizedSystem, p)
+        BulkZerothLLEnergy = max([Energy for Energy in evals if Energy < 0.])
+    
+        p.py = pyFermi
+        LLLEnergy = ZerothLLEnergyQL(pyFermi, FinalizedSystem, p)
+        if debug == True:
+            print('Energy =', LLLEnergy)
+
+        evals, evecs = diagonalize_1D(FinalizedSystem, p)
+        ZeroModeIndex = [index for index in range(p.EigenvectorsCount) if abs(evals[index]) <= 10.*abs(EnergyPrecision)][0]
+        if debug == True:
+            print('Index =', ZeroModeIndex)
+
+        if debug == True:
+# The pzStep is chosen ad hoc
+            pzStep = 10e-4
+            p.pz = p.pz + pzStep
+            evals, evecs = diagonalize_1D(FinalizedSystem, p)
+            print('Velocity calculated by differentiation is', min([Energy for Energy in evals if Energy-BulkZerothLLEnergy > \
+                                                                            -10.*abs(EnergyPrecision)])/pzStep)
+
+        return VelocityZ(evecs[ZeroModeIndex], FinalizedSystem, p)
     
     else:
         raise ValueError("So far, only the option 'BulkZerothLLEnergyNegative = True' is treated")    
@@ -115,6 +197,8 @@ def onsite_1D( site,p ):
     + ( p.M0+p.t+p.t*(1-cos(pyLong))+p.tz*(1-cos(p.pz)) )*s1s0 \
     + p.b0/2.*s2s3 + p.betaz/2.*s0s3
     if (x == 0):
+        if hasattr(p, 'Rescale_b0_0'):
+            Onsite_temp = Onsite_temp + (p.Rescale_b0_0 - 1.)*p.b0/2.*s2s3
         return p.Rescale_onsite0 * Onsite_temp
     if (x == 1):
         return p.Rescale_onsite1 * Onsite_temp
@@ -182,18 +266,19 @@ def diagonalize_1D( FinalizedSystem, Parameters ):
 
 
 def pSweep_1D( FinalizedSystem, Parameters, pMin, pMax, pCount, yORzSweep ):
+    p = copy(Parameters)
     pSweep = np.linspace(pMin, pMax, pCount)
     EigenValuesSweep = []
     EigenVectorsSweep = []
-    for p in pSweep:
+    for index in pSweep:
         if yORzSweep == 'pzSweep':
-            Parameters.pz = p
+            p.pz = index
         elif yORzSweep == 'pySweep':
-            Parameters.py = p
+            p.py = index
         else:
             raise ValueError("Only two values are possible for the parameter yORzSweep: either 'pzSweep' or 'pySweep'")
         
-        EigenValues, EigenVectors = diagonalize_1D( FinalizedSystem, Parameters )
+        EigenValues, EigenVectors = diagonalize_1D( FinalizedSystem, p )
         EigenValuesSweep.append(EigenValues)
         EigenVectorsSweep.append(EigenVectors)
     
