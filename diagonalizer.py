@@ -82,14 +82,15 @@ def VelocityZ(WaveFunction, FinalizedSystem, Parameters):
     velocityDistribution = [np.vdot(WaveFunction[position_1D[j]], np.dot(VelocityZOperator, WaveFunction[position_1D[j]])) for j in range(SitesCount_X)]
     return sum(np.real(velocityDistribution)) 
 
-
     
-#TODO: replace the comparison involving factor 0.5 with some better criterion
-def ZerothLLEnergyQL(py, FinalizedSystem, Parameters, debug = False, BulkZerothLLEnergyNegative = True, EnergyPrecision = 10e-6):
+
+#TODO: try to rewrite the finding of the LLL, by trying to find out the position of the energy gap from a given energy spectrum,
+#and then to understand, to what side of the gap does the LLL belong (or maybe it is in the middle of the gap, then it is even easier) 
+def ZerothLLEnergyQL(py, FinalizedSystem, Parameters, debug = False, BulkZerothLLEnergyNegative = True):
     p = copy(Parameters)
     p.py = 0.
     p.FermiEnergy = 0.
-    p.EnergyPrecision = EnergyPrecision
+    EnergyPrecision = p.EnergyPrecision
 
     evals, evecs = diagonalize_1D(FinalizedSystem, p)
     BulkZerothLLEnergy = max([Energy for Energy in evals if Energy<0])
@@ -98,20 +99,20 @@ def ZerothLLEnergyQL(py, FinalizedSystem, Parameters, debug = False, BulkZerothL
         print('Bulk-state LLL energy =', BulkZerothLLEnergy)
 
     p.py = py
+#     p.FermiEnergy = BulkZerothLLEnergy
     evals, evecs = diagonalize_1D(FinalizedSystem, p)
+# 10e-8 was used ad hoc, I don't like it. However, I cannot just put 10.*abs(EnergyPrecision), it does not work in some cases
+    EnergiesVicinityBulkLLL = [Energy for Energy in evals if abs(Energy - BulkZerothLLEnergy) <= 10e-8]
 
-    EnergiesVicinityBulkLLL = [Energy for Energy in evals if abs(Energy - BulkZerothLLEnergy) <= 10.*abs(EnergyPrecision)]
-    if [Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10.*abs(EnergyPrecision)]:
-        EnergyJustAboveBulkLLL = min([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10.*abs(EnergyPrecision)])
-        if len([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10.*abs(EnergyPrecision)]) >= 2:
+    if [Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8]:
+        EnergyJustAboveBulkLLL = min([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8])
+        if len([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8]) >= 2:
             EnergySecondAboveBulkLLL = min([Energy for Energy in evals if Energy - EnergyJustAboveBulkLLL > 0.])
-        else: return EnergyJustAboveBulkLLL
-    else: return max(EnergiesVicinityBulkLLL)
+        else: 
+            return EnergyJustAboveBulkLLL
+    else:
+        return max([Energy for Energy in evals if Energy - BulkZerothLLEnergy < 10e-8])
 
-#     if hasattr(p, 'VelocityZNode2'):
-#         VelocityZNode2 = p.VelocityZNode2
-#     else:
-#         VelocityZNode2 = 1.
 
     if not EnergiesVicinityBulkLLL:
         if debug == True:
@@ -121,25 +122,36 @@ def ZerothLLEnergyQL(py, FinalizedSystem, Parameters, debug = False, BulkZerothL
         MaxEnergyVicinityBulkLLL = max(EnergiesVicinityBulkLLL)
         if [Energy for Energy in evals if Energy < MaxEnergyVicinityBulkLLL]:
             SecondToMaxEnergyVicinityBulkLLL = [Energy for Energy in evals if Energy < MaxEnergyVicinityBulkLLL][-1]
-#I don't like this resolution of 'if':
+# 3.*10e-8 was taken ad hoc (but the numerical values for the energy splitting are indeed really small)
+            if MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL < 3.*10e-8:
+                print('WARNING: Two energies have too small splitting:',
+                         MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL, 'Try increasing the number of lattice sites')
+                if not [Energy for Energy in evals if Energy < SecondToMaxEnergyVicinityBulkLLL]:
+                    p.FermiEnergy = SecondToMaxEnergyVicinityBulkLLL
+                    evals, evecs = diagonalize_1D(FinalizedSystem, p)
+                SecondToMaxEnergyVicinityBulkLLL = [Energy for Energy in evals \
+                                                        if Energy < SecondToMaxEnergyVicinityBulkLLL - 10e-8][-1]
         else:
-            return MaxEnergyVicinityBulkLLL
-        if EnergyJustAboveBulkLLL - max(EnergiesVicinityBulkLLL) > 10.*(MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL) \
+            raise ValueError('There are no energies below MaxEnergyVicinityBulkLLL')
+
+        if EnergyJustAboveBulkLLL - MaxEnergyVicinityBulkLLL > 10.*(MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL) \
            and EnergySecondAboveBulkLLL - EnergyJustAboveBulkLLL > 10.*(MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL):
-# I don't like this place (both parts of the boolean argument in the 'if' statement), it should be somehow redone:
-#         if EnergySecondAboveBulkLLL - EnergyJustAboveBulkLLL > 0.5*(EnergyJustAboveBulkLLL - BulkZerothLLEnergy) \
-#                 and EnergyJustAboveBulkLLL < 0.:
-#EnergySecondAboveBulkLLL - EnergyJustAboveBulkLLL > 2.*abs(VelocityZNode2)*sqrt(p.lBinv2):
             if debug == True:
+                print('EnergyJustAboveBulkLLL - MaxEnergyVicinityBulkLLL =', EnergyJustAboveBulkLLL - MaxEnergyVicinityBulkLLL)
+                print('EnergySecondAboveBulkLLL - EnergyJustAboveBulkLLL =', EnergySecondAboveBulkLLL - EnergyJustAboveBulkLLL)
+                print('MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL =', MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL)
+                print(evals)
                 print('I choose EnergyJustAboveBulkLLL, while EnergySecondAboveBulkLLL =', EnergySecondAboveBulkLLL)
             return EnergyJustAboveBulkLLL
         else:
+            if debug == True:
+                print('MaxEnergyVicinityBulkLLL is the choice, the energy spectrum is', evals)
             return MaxEnergyVicinityBulkLLL
 
 
 
 # Quantum limit in magnetic field is assumed here
-# I use here the Brent's method, because a naive manual shoo-and-see method performs poorly (at least in my particular 
+# I use here the Brent's method, because a naive manual shoot-and-see method performs poorly (at least in my particular 
 # realization)
 def FermiVelocityZQL(FinalizedSystem, Parameters, BulkZerothLLEnergyNegative = True, \
                             EnergyPrecision = 10e-6, pyGuess = 1., debug = False):
@@ -151,11 +163,14 @@ def FermiVelocityZQL(FinalizedSystem, Parameters, BulkZerothLLEnergyNegative = T
         p.FermiEnergy = 0.
         p.EnergyPrecision = EnergyPrecision
 
-        pyFermi = brentq(ZerothLLEnergyQL, pyGuess, 0., \
+        if not debug == True:
+            pyFermi = brentq(ZerothLLEnergyQL, pyGuess, 0., \
                             xtol = 10e-5, rtol = 10e-5, args = (FinalizedSystem, p), disp = True)
-
-        if debug == True:
+        else:
+            pyFermi, full_output = brentq(ZerothLLEnergyQL, pyGuess, 0., \
+                            xtol = 10e-5, rtol = 10e-5, args = (FinalizedSystem, p), disp = True, full_output = True)
             print('pyF =', pyFermi)
+           
 
         p.py = 0.
         evals, evecs = diagonalize_1D(FinalizedSystem, p)
