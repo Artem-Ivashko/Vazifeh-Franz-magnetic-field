@@ -102,16 +102,39 @@ def ZerothLLEnergyQL(py, FinalizedSystem, Parameters, debug = False, BulkZerothL
 #     p.FermiEnergy = BulkZerothLLEnergy
     evals, evecs = diagonalize_1D(FinalizedSystem, p)
 # 10e-8 was used ad hoc, I don't like it. However, I cannot just put 10.*abs(EnergyPrecision), it does not work in some cases
+
     EnergiesVicinityBulkLLL = [Energy for Energy in evals if abs(Energy - BulkZerothLLEnergy) <= 10e-8]
 
-    if [Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8]:
+
+    if len([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8]) >= 2:
         EnergyJustAboveBulkLLL = min([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8])
-        if len([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8]) >= 2:
-            EnergySecondAboveBulkLLL = min([Energy for Energy in evals if Energy - EnergyJustAboveBulkLLL > 0.])
-        else: 
-            return EnergyJustAboveBulkLLL
+        EnergySecondAboveBulkLLL = min([Energy for Energy in evals if Energy - EnergyJustAboveBulkLLL > 0.])
     else:
-        return max([Energy for Energy in evals if Energy - BulkZerothLLEnergy < 10e-8])
+        p.EigenvectorsCount = 2 * p.EigenvectorsCount
+        evals, evecs = diagonalize_1D(FinalizedSystem, p)
+        if debug == True:
+            print('WARNING: the number of eigenvalues was doubled. Try to increase this number them from the beginning', BulkZerothLLEnergy)
+            print('Energy spectrum is', evals)
+        if len([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8]) >= 2:
+            EnergyJustAboveBulkLLL = min([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8])
+            EnergySecondAboveBulkLLL = min([Energy for Energy in evals if Energy - EnergyJustAboveBulkLLL > 0.])
+        else:
+            raise ValueError('There are still not enough energies above BulkZerothLLEnergy')
+
+#     if [Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8]:
+#         EnergyJustAboveBulkLLL = min([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8])
+#         if len([Energy for Energy in evals if Energy - BulkZerothLLEnergy > 10e-8]) >= 2:
+#             EnergySecondAboveBulkLLL = min([Energy for Energy in evals if Energy - EnergyJustAboveBulkLLL > 0.])
+#         else:
+#             if debug == True:
+#                 print('No EnergySecondAboveBulkLLL')
+#                 print('Energy spectrum is', evals)
+#             return EnergyJustAboveBulkLLL
+#     else:
+#         if debug == True:
+#             print('No energies that are significantly above BulkZerothLLEnergy')
+#             print('Energy spectrum is', evals)
+#         return max([Energy for Energy in evals if Energy - BulkZerothLLEnergy < 10e-8])
 
 
     if not EnergiesVicinityBulkLLL:
@@ -123,12 +146,15 @@ def ZerothLLEnergyQL(py, FinalizedSystem, Parameters, debug = False, BulkZerothL
         if [Energy for Energy in evals if Energy < MaxEnergyVicinityBulkLLL]:
             SecondToMaxEnergyVicinityBulkLLL = [Energy for Energy in evals if Energy < MaxEnergyVicinityBulkLLL][-1]
 # 3.*10e-8 was taken ad hoc (but the numerical values for the energy splitting are indeed really small)
-            if MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL < 3.*10e-8:
+            if MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL < 2.*10e-8:
                 print('WARNING: Two energies have too small splitting:',
                          MaxEnergyVicinityBulkLLL - SecondToMaxEnergyVicinityBulkLLL, 'Try increasing the number of lattice sites')
                 if not [Energy for Energy in evals if Energy < SecondToMaxEnergyVicinityBulkLLL]:
                     p.FermiEnergy = SecondToMaxEnergyVicinityBulkLLL
                     evals, evecs = diagonalize_1D(FinalizedSystem, p)
+                    if debug == True:
+                        print('The central energy was changed to', SecondToMaxEnergyVicinityBulkLLL)
+                        print(evals)
                 SecondToMaxEnergyVicinityBulkLLL = [Energy for Energy in evals \
                                                         if Energy < SecondToMaxEnergyVicinityBulkLLL - 10e-8][-1]
         else:
@@ -154,7 +180,7 @@ def ZerothLLEnergyQL(py, FinalizedSystem, Parameters, debug = False, BulkZerothL
 # I use here the Brent's method, because a naive manual shoot-and-see method performs poorly (at least in my particular 
 # realization)
 def FermiVelocityZQL(FinalizedSystem, Parameters, BulkZerothLLEnergyNegative = True, \
-                            EnergyPrecision = 10e-6, pyGuess = 1., debug = False):
+                            EnergyPrecision = 10e-6, pyGuess = 1., pyGuess2 = 0., debug = False):
     if BulkZerothLLEnergyNegative == True:
         # I assume that py = 0 corresponds to the BULK energy levels
         # py > 0. is expected to correspond to the state at the LEFT boundary,
@@ -164,12 +190,13 @@ def FermiVelocityZQL(FinalizedSystem, Parameters, BulkZerothLLEnergyNegative = T
         p.EnergyPrecision = EnergyPrecision
 
         if not debug == True:
-            pyFermi = brentq(ZerothLLEnergyQL, pyGuess, 0., \
+            pyFermi = brentq(ZerothLLEnergyQL, pyGuess, pyGuess2, \
                             xtol = 10e-5, rtol = 10e-5, args = (FinalizedSystem, p), disp = True)
         else:
-            pyFermi, full_output = brentq(ZerothLLEnergyQL, pyGuess, 0., \
+            pyFermi, full_output = brentq(ZerothLLEnergyQL, pyGuess, pyGuess2, \
                             xtol = 10e-5, rtol = 10e-5, args = (FinalizedSystem, p), disp = True, full_output = True)
-            print('pyF =', pyFermi)
+#            print('pyF =', pyFermi)
+            print(full_output)
            
 
         p.py = 0.
@@ -183,15 +210,15 @@ def FermiVelocityZQL(FinalizedSystem, Parameters, BulkZerothLLEnergyNegative = T
 
         evals, evecs = diagonalize_1D(FinalizedSystem, p)
         ZeroModeIndex = [index for index in range(p.EigenvectorsCount) if abs(evals[index]) <= 10.*abs(EnergyPrecision)][0]
-        if debug == True:
-            print('Index =', ZeroModeIndex)
+#         if debug == True:
+#             print('Index =', ZeroModeIndex)
 
         if debug == True:
 # The pzStep is chosen ad hoc
             pzStep = 10e-4
             p.pz = p.pz + pzStep
             evals, evecs = diagonalize_1D(FinalizedSystem, p)
-            print('Velocity calculated by differentiation is', min([Energy for Energy in evals if Energy-BulkZerothLLEnergy > \
+            print('Velocity calculated by approximate differentiation is', min([Energy for Energy in evals if Energy-BulkZerothLLEnergy > \
                                                                             -10.*abs(EnergyPrecision)])/pzStep)
 
         return VelocityZ(evecs[ZeroModeIndex], FinalizedSystem, p)
