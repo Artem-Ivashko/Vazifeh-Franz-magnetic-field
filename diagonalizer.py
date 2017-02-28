@@ -345,12 +345,15 @@ def density_plot_1D( FinalizedSystem, Parameters, EigenVectors ):
     
     
     
-def spectrum_plot_1D( EigenValues, pMin, pMax, pCount ):
+def spectrum_plot_1D( EigenValues, pMin, pMax, pCount, ShowPlot = True ):
     pSweep = np.linspace(pMin, pMax, pCount)
     plt.plot(pSweep, EigenValues,"k.",markersize=3)
     plt.xlim(pMin,pMax)
     plt.ylabel('Energy [t]')
-    plt.show()
+    if ShowPlot == True:
+        plt.show()
+    else:
+        return plt
     
     
 
