@@ -10,6 +10,7 @@ import numpy as np
 from scipy.sparse import linalg as lag
 from scipy.optimize import brentq
 
+import matplotlib as mpl
 from matplotlib import pyplot as plt
 
 from tinyarray import array as ta
@@ -347,11 +348,11 @@ def density_plot_1D( FinalizedSystem, Parameters, EigenVectors ):
     
 def spectrum_plot_1D( EigenValues, pMin, pMax, pCount, ShowPlot = True ):
     pSweep = np.linspace(pMin, pMax, pCount)
-    plt.plot(pSweep, EigenValues,"k.",markersize=3)
+    mpl.rcParams['font.size'] = 16
+    plt.plot(pSweep, EigenValues,"b.",markersize=3)
     plt.xlim(pMin,pMax)
-    plt.ylabel('Energy [t]')
     if ShowPlot == True:
-        plt.show()
+        plt.show()    
     else:
         return plt
     
