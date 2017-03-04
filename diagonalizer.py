@@ -349,6 +349,8 @@ def density_plot_1D( FinalizedSystem, Parameters, EigenVectors ):
 def spectrum_plot_1D( EigenValues, pMin, pMax, pCount, ShowPlot = True ):
     pSweep = np.linspace(pMin, pMax, pCount)
     mpl.rcParams['font.size'] = 16
+#     print(mpl.rcParams['mathtext.default'])
+#     mpl.rcParams['mathtext.default'] = 'regular'
     plt.plot(pSweep, EigenValues,"b.",markersize=3)
     plt.xlim(pMin,pMax)
     if ShowPlot == True:
