@@ -242,9 +242,13 @@ def onsite_1D( site,p ):
     if (x == 0):
         if hasattr(p, 'Rescale_b0_0'):
             Onsite_temp = Onsite_temp + (p.Rescale_b0_0 - 1.)*p.b0/2.*s2s3
-        return p.Rescale_onsite0 * Onsite_temp
+        if hasattr(p, 'Rescale_onsite0'):
+            Onsite_temp = p.Rescale_onsite0 * Onsite_temp
+        return Onsite_temp
     if (x == 1):
-        return p.Rescale_onsite1 * Onsite_temp
+        if hasattr(p, 'Rescale_onsite1'):
+            Onsite_temp = p.Rescale_onsite1 * Onsite_temp
+        return Onsite_temp
     else:
         return Onsite_temp
     
@@ -262,7 +266,7 @@ def hop_1D( s1,s2,p ):
 #Only the prefactor in front of j was flipped to opposite (on 260jan-2017),
 #in order to accomodate to the notation of Artem that is used in his TeX notes
     x, = s2.pos
-    if x == 0:
+    if x == 0 and hasattr(p, 'Rescale_hop0'):
         return p.Rescale_hop0 * (+ 0.5j*p.tp*s3s1 - 0.5*p.t*s1s0)
     else:
         return + 0.5j*p.tp*s3s1 - 0.5*p.t*s1s0
