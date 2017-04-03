@@ -239,18 +239,21 @@ def onsite_1D( site,p ):
     Onsite_temp = p.tp*sin(pyLong)*s3s2 + p.tzp*sin(p.pz)*s2s0 \
     + ( p.M0+p.t+p.t*(1-cos(pyLong))+p.tz*(1-cos(p.pz)) )*s1s0 \
     + p.b0/2.*s2s3 + p.betaz/2.*s0s3
+
     if (x == 0):
         if hasattr(p, 'Rescale_b0_0'):
             Onsite_temp = Onsite_temp + (p.Rescale_b0_0 - 1.)*p.b0/2.*s2s3
         if hasattr(p, 'Rescale_onsite0'):
             Onsite_temp = p.Rescale_onsite0 * Onsite_temp
-        return Onsite_temp
-    if (x == 1):
+    elif (x == 1):
         if hasattr(p, 'Rescale_onsite1'):
             Onsite_temp = p.Rescale_onsite1 * Onsite_temp
-        return Onsite_temp
-    else:
-        return Onsite_temp
+    elif hasattr(p, 'SitesCount'):
+        if x == p.SitesCount - 1:
+            if hasattr(p, 'Rescale_b0_LastSite'):
+                Onsite_temp = Onsite_temp + (p.Rescale_b0_LastSite - 1.)*p.b0/2.*s2s3
+
+    return Onsite_temp
     
 #And below is the on-site energy implemented in the code that was given to Artem by Paul on 28-Nov'16
 #Which seems to give the same spectrum. The differences are in some of the 4x4 matrices
@@ -291,7 +294,7 @@ def FinalizedSystem_1D( SitesCount_X ):
     
     
 def diagonalize_1D( FinalizedSystem, Parameters ):
-    ham_sparse_coo = FinalizedSystem.hamiltonian_submatrix( args=([Parameters]), sparse=True )
+    ham_sparse_coo = FinalizedSystem.hamiltonian_submatrix( args=[Parameters], sparse=True )
     #Conversion to some "compressed sparse" format
     ham_sparse = ham_sparse_coo.tocsc()
     #Finding k=EigenvectorsCount eigenvalues of the Hamiltonian H, which are located around sigma=0, 
